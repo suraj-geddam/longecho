@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+voice_library/*.pkl
+voice_library/*.wav
+*.wav
+*.mp3
+*.log
+.DS_Store
+
+# Internal plans and notes
+docs/

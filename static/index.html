@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LongEcho - Long-Form TTS</title>
+    <style>
+        :root {
+            /* Dark theme (default) - Purple/Pink/Cyan */
+            --bg-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            --blob-1: rgba(139, 92, 246, 0.6);
+            --blob-2: rgba(236, 72, 153, 0.5);
+            --blob-3: rgba(6, 182, 212, 0.5);
+            --glass-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --glass-border-top: rgba(255, 255, 255, 0.3);
+            --glass-border-left: rgba(255, 255, 255, 0.25);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-muted: rgba(255, 255, 255, 0.4);
+            --input-bg: rgba(255, 255, 255, 0.08);
+            --input-bg-focus: rgba(255, 255, 255, 0.12);
+            --input-border: rgba(255, 255, 255, 0.15);
+            --focus-color: rgba(139, 92, 246, 0.5);
+            --focus-glow: rgba(139, 92, 246, 0.2);
+            --btn-gradient: linear-gradient(135deg, rgba(139, 92, 246, 0.4) 0%, rgba(236, 72, 153, 0.4) 100%);
+            --btn-gradient-hover: linear-gradient(135deg, rgba(139, 92, 246, 0.6) 0%, rgba(236, 72, 153, 0.6) 100%);
+            --btn-disabled-bg: rgba(255, 255, 255, 0.05);
+            --btn-disabled-border: rgba(255, 255, 255, 0.1);
+            --btn-disabled-text: rgba(255, 255, 255, 0.3);
+            --select-option-bg: #1a1a2e;
+            --error-bg: rgba(239, 68, 68, 0.2);
+            --error-border: rgba(239, 68, 68, 0.4);
+            --error-text: #fca5a5;
+            --shadow-color: rgba(0, 0, 0, 0.3);
+        }
+
+        [data-theme="light"] {
+            /* Light theme - Blue/Rust/Warm */
+            --bg-gradient: linear-gradient(135deg, #dbeafe 0%, #f1f5f9 50%, #e0f2fe 100%);
+            --blob-1: rgba(56, 189, 248, 0.7);
+            --blob-2: rgba(59, 130, 246, 0.7);
+            --blob-3: rgba(194, 65, 12, 0.8);
+            --glass-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.15) 100%);
+            --glass-border: rgba(255, 255, 255, 0.6);
+            --glass-border-top: rgba(255, 255, 255, 0.8);
+            --glass-border-left: rgba(255, 255, 255, 0.7);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+            --text-primary: #1e293b;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --input-bg: rgba(255, 255, 255, 0.5);
+            --input-bg-focus: rgba(255, 255, 255, 0.7);
+            --input-border: rgba(148, 163, 184, 0.3);
+            --focus-color: rgba(59, 130, 246, 0.5);
+            --focus-glow: rgba(59, 130, 246, 0.2);
+            --btn-gradient: linear-gradient(135deg, rgba(59, 130, 246, 0.8) 0%, rgba(14, 165, 233, 0.8) 100%);
+            --btn-gradient-hover: linear-gradient(135deg, rgba(59, 130, 246, 1) 0%, rgba(14, 165, 233, 1) 100%);
+            --btn-disabled-bg: rgba(148, 163, 184, 0.2);
+            --btn-disabled-border: rgba(148, 163, 184, 0.3);
+            --btn-disabled-text: rgba(148, 163, 184, 0.6);
+            --select-option-bg: #ffffff;
+            --error-bg: rgba(239, 68, 68, 0.15);
+            --error-border: rgba(239, 68, 68, 0.3);
+            --error-text: #dc2626;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: background 0.3s ease;
+        }
+
+        body::before,
+        body::after {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            z-index: 0;
+            transition: background 0.3s ease;
+        }
+
+        body::before {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, var(--blob-1) 0%, transparent 70%);
+            top: -150px;
+            right: -100px;
+        }
+
+        body::after {
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--blob-2) 0%, transparent 70%);
+            bottom: -200px;
+            left: -150px;
+        }
+
+        .blob-accent {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, var(--blob-3) 0%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(80px);
+            z-index: 0;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: background 0.3s ease;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-top: 1px solid var(--glass-border-top);
+            border-left: 1px solid var(--glass-border-left);
+            border-radius: 24px;
+            box-shadow: var(--glass-shadow), var(--glass-inset);
+            width: 70vw;
+            height: 85vh;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            color: var(--text-primary);
+            font-size: 32px;
+            text-shadow: 0 2px 4px var(--shadow-color);
+        }
+
+        .theme-toggle {
+            width: auto;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 6px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            box-shadow: none;
+        }
+
+        .theme-toggle:hover {
+            background: var(--input-bg-focus);
+            border-color: var(--focus-color);
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            font-size: 14px;
+            text-shadow: 0 1px 2px var(--shadow-color);
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+            font-weight: 500;
+            text-shadow: 0 1px 2px var(--shadow-color);
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            background: var(--input-bg);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            border: 1px solid var(--input-border);
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+            flex: 1;
+            min-height: 150px;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--focus-color);
+            background: var(--input-bg-focus);
+            box-shadow: 0 0 0 3px var(--focus-glow);
+        }
+
+        textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        select {
+            width: 100%;
+            padding: 12px 36px 12px 12px;
+            background: var(--input-bg);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            border: 1px solid var(--input-border);
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: var(--focus-color);
+            background-color: var(--input-bg-focus);
+            box-shadow: 0 0 0 3px var(--focus-glow);
+        }
+
+        select option {
+            background: var(--select-option-bg);
+            color: var(--text-primary);
+            padding: 8px 12px;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: var(--btn-gradient);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            color: #ffffff;
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px var(--shadow-color);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        button:hover {
+            background: var(--btn-gradient-hover);
+            border-color: var(--glass-border-top);
+            box-shadow: 0 6px 20px var(--shadow-color);
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            background: var(--btn-disabled-bg);
+            border-color: var(--btn-disabled-border);
+            color: var(--btn-disabled-text);
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .button-row button {
+            flex: 1;
+        }
+
+        .button-row .stop-btn {
+            flex: 0 0 auto;
+            width: auto;
+            padding: 14px 20px;
+        }
+
+        .progress {
+            margin-top: 20px;
+            padding: 12px;
+            background: var(--input-bg);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid var(--input-border);
+            border-radius: 8px;
+            display: none;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .progress.visible {
+            display: block;
+        }
+
+        .audio-player {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .audio-player.visible {
+            display: block;
+        }
+
+        .audio-player label {
+            color: var(--text-primary);
+            text-shadow: 0 1px 2px var(--shadow-color);
+        }
+
+        /* Custom Audio Player Controls */
+        .audio-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 10px;
+            padding: 12px 16px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            box-shadow: var(--glass-shadow), var(--glass-inset);
+        }
+
+        .play-pause-btn {
+            width: 44px;
+            height: 44px;
+            min-width: 44px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--btn-gradient);
+            border: 1px solid var(--glass-border);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .play-pause-btn span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .play-pause-btn span[data-state="play"] {
+            transform: translateX(2px);
+        }
+
+        .play-pause-btn span[data-state="pause"] {
+            font-size: 20px;
+        }
+
+        .play-pause-btn:hover {
+            background: var(--btn-gradient-hover);
+            transform: scale(1.05);
+        }
+
+        .play-pause-btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px var(--focus-glow);
+        }
+
+        .time-display {
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-variant-numeric: tabular-nums;
+            min-width: 90px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .progress-container {
+            flex: 1;
+            height: 8px;
+            min-width: 100px;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 4px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--btn-gradient);
+            border-radius: 3px;
+            transition: width 0.1s linear;
+            pointer-events: none;
+        }
+
+        .progress-container:hover .progress-bar {
+            background: var(--btn-gradient-hover);
+        }
+
+        .progress-container:focus {
+            outline: none;
+            border-color: var(--focus-color);
+            box-shadow: 0 0 0 3px var(--focus-glow);
+        }
+
+        .volume-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .volume-icon {
+            color: var(--text-secondary);
+            font-size: 16px;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .volume-icon:hover {
+            color: var(--text-primary);
+        }
+
+        .volume-slider {
+            width: 80px;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin: 0 7px;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: var(--text-primary);
+            border: 2px solid var(--glass-border);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            background: var(--text-primary);
+            border: 2px solid var(--glass-border);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .volume-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .volume-slider::-moz-range-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .volume-slider:focus {
+            outline: none;
+            border-color: var(--focus-color);
+            box-shadow: 0 0 0 3px var(--focus-glow);
+        }
+
+        /* Responsive adjustments for audio controls */
+        @media (max-width: 600px) {
+            .audio-controls {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .time-display {
+                order: 3;
+                min-width: auto;
+            }
+
+            .progress-container {
+                order: 4;
+                flex-basis: 100%;
+            }
+
+            .volume-container {
+                order: 2;
+                margin-left: auto;
+            }
+        }
+
+        .error {
+            margin-top: 20px;
+            padding: 12px;
+            background: var(--error-bg);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid var(--error-border);
+            border-radius: 8px;
+            color: var(--error-text);
+            display: none;
+        }
+
+        .error.visible {
+            display: block;
+        }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            padding: 12px 20px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px var(--shadow-color);
+            animation: slideIn 0.3s ease, fadeOut 0.3s ease 3.7s forwards;
+            max-width: 300px;
+        }
+
+        .toast.info {
+            background: rgba(59, 130, 246, 0.9);
+            border: 1px solid rgba(59, 130, 246, 0.5);
+            color: white;
+        }
+
+        .toast.success {
+            background: rgba(34, 197, 94, 0.9);
+            border: 1px solid rgba(34, 197, 94, 0.5);
+            color: white;
+        }
+
+        .toast.error {
+            background: rgba(239, 68, 68, 0.9);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: white;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="toast-container" id="toastContainer"></div>
+    <div class="blob-accent"></div>
+    <div class="container">
+        <div class="header">
+            <h1>LongEcho</h1>
+            <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌙</button>
+        </div>
+        <p class="subtitle">Long-form text-to-speech with Echo-TTS</p>
+
+        <form id="generateForm">
+            <label for="text">Text to Generate:</label>
+            <textarea
+                id="text"
+                name="text"
+                placeholder="Enter your text here... (any length)"
+                required
+            ></textarea>
+
+            <label for="voice">Voice:</label>
+            <select id="voice" name="voice" required>
+                <option value="">Loading voices...</option>
+            </select>
+
+            <div class="button-row">
+                <button type="submit" id="generateBtn">Generate Audio</button>
+                <button type="button" id="stopBtn" class="stop-btn" disabled>Stop</button>
+            </div>
+        </form>
+
+        <div id="progress" class="progress"></div>
+        <div id="error" class="error"></div>
+
+        <div id="audioPlayer" class="audio-player">
+            <label>Generated Audio:</label>
+            <div class="audio-controls">
+                <button type="button" class="play-pause-btn" id="playPauseBtn" title="Play/Pause">
+                    <span id="playPauseIcon" data-state="play">▶</span>
+                </button>
+                <span class="time-display" id="timeDisplay">0:00 / 0:00</span>
+                <div class="progress-container" id="progressContainer" tabindex="0" role="slider" aria-label="Audio progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="volume-container">
+                    <span class="volume-icon" id="volumeIcon" title="Mute/Unmute">🔊</span>
+                    <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="100" title="Volume">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('generateForm');
+        const textArea = document.getElementById('text');
+        const voiceSelect = document.getElementById('voice');
+        const generateBtn = document.getElementById('generateBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const progressDiv = document.getElementById('progress');
+        const errorDiv = document.getElementById('error');
+        const audioPlayerDiv = document.getElementById('audioPlayer');
+        const themeToggle = document.getElementById('themeToggle');
+
+        // Custom audio player control refs
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const playPauseIcon = document.getElementById('playPauseIcon');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const volumeIcon = document.getElementById('volumeIcon');
+        const volumeSlider = document.getElementById('volumeSlider');
+
+        const toastContainer = document.getElementById('toastContainer');
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+
+            // Remove after animation completes
+            setTimeout(() => {
+                toast.remove();
+            }, 4000);
+        }
+
+        // Add voice to dropdown (maintaining sorted order)
+        function addVoiceToDropdown(voiceName) {
+            // Check if already exists
+            const existing = Array.from(voiceSelect.options).find(opt => opt.value === voiceName);
+            if (existing) return;
+
+            const option = document.createElement('option');
+            option.value = voiceName;
+            option.textContent = voiceName;
+
+            // Insert in sorted position
+            const options = Array.from(voiceSelect.options);
+            const insertIndex = options.findIndex(opt => opt.value > voiceName);
+
+            if (insertIndex === -1) {
+                voiceSelect.appendChild(option);
+            } else {
+                voiceSelect.insertBefore(option, voiceSelect.options[insertIndex]);
+            }
+        }
+
+        // Remove voice from dropdown
+        function removeVoiceFromDropdown(voiceName) {
+            const option = Array.from(voiceSelect.options).find(opt => opt.value === voiceName);
+            if (option) {
+                option.remove();
+            }
+        }
+
+        // Voice event source for cleanup
+        let voiceEventSource = null;
+
+        // Subscribe to voice events
+        function subscribeToVoiceEvents() {
+            if (voiceEventSource) {
+                voiceEventSource.close();
+            }
+            voiceEventSource = new EventSource('/voice-events');
+
+            voiceEventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'processing') {
+                    showToast(`Processing '${data.voice}'...`, 'info');
+                } else if (data.type === 'ready') {
+                    showToast(`Voice '${data.voice}' ready`, 'success');
+                    addVoiceToDropdown(data.voice);
+                } else if (data.type === 'error') {
+                    showToast(`Failed to load '${data.voice}': ${data.reason}`, 'error');
+                } else if (data.type === 'removed') {
+                    showToast(`Voice '${data.voice}' removed`, 'info');
+                    removeVoiceFromDropdown(data.voice);
+                }
+            };
+
+            voiceEventSource.onerror = (error) => {
+                console.error('Voice events connection error:', error);
+                voiceEventSource.close();
+                // Reconnect after 5 seconds
+                setTimeout(subscribeToVoiceEvents, 5000);
+            };
+        }
+
+        let audioBuffers = [];
+        let audioContext = null;
+        let processingChunk = false;
+        let chunkQueue = [];
+        let currentEventSource = null;
+        let currentGenerationId = null;  // Track generation ID for stop requests
+
+        // AudioBufferSourceNode scheduling state
+        let nextStartTime = 0;
+        let gainNode = null;
+        let isStreaming = false;
+
+        // Playback state management
+        let isPlaying = false;
+        let playbackStartTime = 0;        // audioContext.currentTime when play started
+        let playbackOffset = 0;           // where in the audio we started from
+        let totalDuration = 0;            // sum of all buffer durations
+        let currentSource = null;         // current AudioBufferSourceNode
+        let animationFrameId = null;      // for requestAnimationFrame loop
+        let previousVolume = 100;         // for mute/unmute toggle
+
+        // Theme handling
+        function setTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            themeToggle.textContent = theme === 'light' ? '☀️' : '🌙';
+            localStorage.setItem('theme', theme);
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            setTheme(currentTheme === 'light' ? 'dark' : 'light');
+        }
+
+        // Load saved theme or default to dark
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        setTheme(savedTheme);
+
+        themeToggle.addEventListener('click', toggleTheme);
+
+        // Format time in MM:SS or H:MM:SS for times >= 1 hour
+        function formatTime(seconds) {
+            if (!isFinite(seconds) || seconds < 0) seconds = 0;
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+            return `${minutes}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Get current playback time
+        function getCurrentTime() {
+            if (!audioContext) return 0;
+            if (isPlaying) {
+                return playbackOffset + (audioContext.currentTime - playbackStartTime);
+            }
+            return playbackOffset;
+        }
+
+        // Update time display and progress bar
+        function updateTimeDisplay() {
+            const current = getCurrentTime();
+            const duration = totalDuration;
+
+            timeDisplay.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
+
+            if (duration > 0) {
+                const percentage = Math.min((current / duration) * 100, 100);
+                progressBar.style.width = `${percentage}%`;
+                progressContainer.setAttribute('aria-valuenow', Math.round(percentage));
+            } else {
+                progressBar.style.width = '0%';
+                progressContainer.setAttribute('aria-valuenow', 0);
+            }
+        }
+
+        // Start the playback animation loop
+        function startPlaybackLoop() {
+            function loop() {
+                updateTimeDisplay();
+
+                // Check if we've reached the end
+                const current = getCurrentTime();
+                if (current >= totalDuration && totalDuration > 0 && !isStreaming) {
+                    // Playback ended naturally
+                    handlePlaybackEnded();
+                    return;
+                }
+
+                if (isPlaying) {
+                    animationFrameId = requestAnimationFrame(loop);
+                }
+            }
+            animationFrameId = requestAnimationFrame(loop);
+        }
+
+        // Stop the playback animation loop
+        function stopPlaybackLoop() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+        }
+
+        // Handle when playback reaches the end naturally
+        function handlePlaybackEnded() {
+            isPlaying = false;
+            playbackOffset = 0;
+            currentSource = null;
+            playPauseIcon.textContent = '\u25B6';
+            playPauseIcon.dataset.state = 'play';
+            stopPlaybackLoop();
+            updateTimeDisplay();
+        }
+
+        // Reset all playback state for a new generation
+        function resetPlaybackState() {
+            // Stop current playback if playing
+            if (isPlaying) {
+                stopPlayback();
+            }
+
+            // Stop any existing source
+            if (currentSource) {
+                try {
+                    currentSource.onended = null;
+                    currentSource.stop();
+                } catch (e) {
+                    // Source may already be stopped
+                }
+                currentSource = null;
+            }
+
+            // Cancel animation frames
+            stopPlaybackLoop();
+
+            // Reset playback state variables
+            isPlaying = false;
+            playbackStartTime = 0;
+            playbackOffset = 0;
+            totalDuration = 0;
+
+            // Reset UI
+            playPauseIcon.textContent = '\u25B6';
+            playPauseIcon.dataset.state = 'play';
+            timeDisplay.textContent = '0:00 / 0:00';
+            progressBar.style.width = '0%';
+            progressContainer.setAttribute('aria-valuenow', 0);
+
+            // Hide audio player
+            audioPlayerDiv.classList.remove('visible');
+        }
+
+        // Start playback from a given offset
+        function startPlayback(fromOffset = playbackOffset) {
+            if (audioBuffers.length === 0) return;
+
+            // Stop any existing source
+            if (currentSource) {
+                try {
+                    currentSource.onended = null;
+                    currentSource.stop();
+                } catch (e) {
+                    // Source may already be stopped
+                }
+                currentSource = null;
+            }
+
+            // Concatenate all buffers
+            const concatenatedBuffer = concatenateAudioBuffers(audioBuffers);
+            if (!concatenatedBuffer) return;
+
+            // Clamp offset to valid range
+            fromOffset = Math.max(0, Math.min(fromOffset, concatenatedBuffer.duration));
+
+            // Create new AudioBufferSourceNode
+            const source = audioContext.createBufferSource();
+            source.buffer = concatenatedBuffer;
+            source.connect(gainNode);
+
+            // Start at the specified offset
+            source.start(0, fromOffset);
+
+            // Update state
+            currentSource = source;
+            isPlaying = true;
+            playbackStartTime = audioContext.currentTime;
+            playbackOffset = fromOffset;
+
+            // Update UI
+            playPauseIcon.textContent = '\u23F8';
+            playPauseIcon.dataset.state = 'pause';
+            audioPlayerDiv.classList.add('visible');
+
+            // Start animation loop
+            startPlaybackLoop();
+
+            // Handle natural end of playback
+            source.onended = () => {
+                // Only handle if this is still the current source and we're still "playing"
+                if (currentSource === source && isPlaying) {
+                    // Calculate where we should be in the audio
+                    const elapsedTime = audioContext.currentTime - playbackStartTime;
+                    const endedAtPosition = fromOffset + elapsedTime;
+
+                    // Check if more audio has arrived since we started
+                    // (totalDuration may have grown while we were playing)
+                    if (isStreaming && endedAtPosition < totalDuration) {
+                        // More audio available - restart from where we left off
+                        console.log(`Continuing playback: ended at ${endedAtPosition.toFixed(2)}s, total now ${totalDuration.toFixed(2)}s`);
+                        startPlayback(endedAtPosition);
+                    } else if (!isStreaming && endedAtPosition < totalDuration - 0.1) {
+                        // Not streaming but still more audio (edge case: final chunks arrived just before end)
+                        console.log(`Final continuation: ended at ${endedAtPosition.toFixed(2)}s, total ${totalDuration.toFixed(2)}s`);
+                        startPlayback(endedAtPosition);
+                    } else {
+                        // Truly finished
+                        handlePlaybackEnded();
+                    }
+                }
+            };
+        }
+
+        // Stop/pause playback
+        function stopPlayback() {
+            if (!isPlaying) return;
+
+            // Record current position
+            playbackOffset = getCurrentTime();
+
+            // Stop the source
+            if (currentSource) {
+                try {
+                    currentSource.onended = null;
+                    currentSource.stop();
+                } catch (e) {
+                    // Source may already be stopped
+                }
+                currentSource = null;
+            }
+
+            // Update state
+            isPlaying = false;
+            playPauseIcon.textContent = '\u25B6';
+            playPauseIcon.dataset.state = 'play';
+
+            // Stop animation loop
+            stopPlaybackLoop();
+            updateTimeDisplay();
+        }
+
+        // Toggle play/pause
+        function togglePlayPause() {
+            if (isPlaying) {
+                stopPlayback();
+            } else {
+                startPlayback();
+            }
+        }
+
+        // Seek to a position (0-1 ratio)
+        function seekTo(ratio) {
+            const targetTime = ratio * totalDuration;
+            playbackOffset = targetTime;
+
+            if (isPlaying) {
+                // Restart playback from new position
+                startPlayback(targetTime);
+            } else {
+                // Just update display
+                updateTimeDisplay();
+            }
+        }
+
+        // Event listeners for audio controls
+        playPauseBtn.addEventListener('click', togglePlayPause);
+
+        // Volume slider control
+        volumeSlider.addEventListener('input', () => {
+            const volume = volumeSlider.value / 100;
+            if (gainNode) {
+                gainNode.gain.value = volume;
+            }
+
+            // Update volume icon
+            if (volume === 0) {
+                volumeIcon.textContent = '\uD83D\uDD07';
+            } else if (volume < 0.5) {
+                volumeIcon.textContent = '\uD83D\uDD09';
+            } else {
+                volumeIcon.textContent = '\uD83D\uDD0A';
+            }
+        });
+
+        // Volume icon click to toggle mute
+        volumeIcon.addEventListener('click', () => {
+            if (volumeSlider.value > 0) {
+                // Mute: store current volume and set to 0
+                previousVolume = volumeSlider.value;
+                volumeSlider.value = 0;
+            } else {
+                // Unmute: restore previous volume
+                volumeSlider.value = previousVolume || 100;
+            }
+            // Trigger input event to update gainNode
+            volumeSlider.dispatchEvent(new Event('input'));
+        });
+
+        // Progress bar click to seek
+        progressContainer.addEventListener('click', (e) => {
+            if (totalDuration <= 0) return;
+
+            const rect = progressContainer.getBoundingClientRect();
+            const ratio = (e.clientX - rect.left) / rect.width;
+            seekTo(Math.max(0, Math.min(1, ratio)));
+        });
+
+        // Progress bar drag to seek
+        let isDraggingProgress = false;
+        let dragRatio = 0;
+
+        function updateDragVisual(ratio) {
+            // Update visual without actually seeking (to avoid creating many AudioBufferSourceNodes)
+            const clampedRatio = Math.max(0, Math.min(1, ratio));
+            const percentage = clampedRatio * 100;
+            progressBar.style.width = `${percentage}%`;
+            progressContainer.setAttribute('aria-valuenow', Math.round(percentage));
+
+            // Update time display to show where we'd seek to
+            const targetTime = clampedRatio * totalDuration;
+            timeDisplay.textContent = `${formatTime(targetTime)} / ${formatTime(totalDuration)}`;
+        }
+
+        progressContainer.addEventListener('mousedown', (e) => {
+            if (totalDuration <= 0) return;
+
+            isDraggingProgress = true;
+            const rect = progressContainer.getBoundingClientRect();
+            dragRatio = (e.clientX - rect.left) / rect.width;
+            updateDragVisual(dragRatio);
+
+            // Prevent text selection while dragging
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDraggingProgress) return;
+
+            const rect = progressContainer.getBoundingClientRect();
+            dragRatio = (e.clientX - rect.left) / rect.width;
+            updateDragVisual(dragRatio);
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (!isDraggingProgress) return;
+
+            isDraggingProgress = false;
+
+            // Finalize seek to the drag position
+            const finalRatio = Math.max(0, Math.min(1, dragRatio));
+            seekTo(finalRatio);
+        });
+
+        // Keyboard support for progress bar
+        progressContainer.addEventListener('keydown', (e) => {
+            if (totalDuration <= 0) return;
+
+            const currentRatio = getCurrentTime() / totalDuration;
+            let newRatio = currentRatio;
+
+            switch (e.key) {
+                case 'ArrowLeft':
+                    newRatio = Math.max(0, currentRatio - 0.05);
+                    break;
+                case 'ArrowRight':
+                    newRatio = Math.min(1, currentRatio + 0.05);
+                    break;
+                case 'Home':
+                    newRatio = 0;
+                    break;
+                case 'End':
+                    newRatio = 1;
+                    break;
+                default:
+                    return;
+            }
+
+            e.preventDefault();
+            seekTo(newRatio);
+        });
+
+        // Load voices on page load
+        async function loadVoices() {
+            try {
+                const response = await fetch('/voices');
+                const data = await response.json();
+
+                voiceSelect.innerHTML = '';
+
+                if (data.voices.length === 0) {
+                    voiceSelect.innerHTML = '<option value="">No voices available</option>';
+                    return;
+                }
+
+                data.voices.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice;
+                    option.textContent = voice;
+                    voiceSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Failed to load voices:', error);
+                voiceSelect.innerHTML = '<option value="">Error loading voices</option>';
+            }
+        }
+
+        // Handle form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const text = textArea.value.trim();
+            const voice = voiceSelect.value;
+
+            if (!text || !voice) {
+                showError('Please enter text and select a voice');
+                return;
+            }
+
+            // Reset all playback state before starting new generation
+            resetPlaybackState();
+
+            // Close existing AudioContext if present
+            if (audioContext) {
+                try {
+                    audioContext.close();
+                } catch (e) {}
+            }
+
+            // Reset audio data state
+            audioBuffers = [];
+            chunkQueue = [];
+            processingChunk = false;
+
+            // Create fresh AudioContext
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+            // Create GainNode for volume control and connect to destination
+            gainNode = audioContext.createGain();
+            gainNode.connect(audioContext.destination);
+            // Apply current volume slider value
+            gainNode.gain.value = volumeSlider.value / 100;
+
+            // Reset scheduling state
+            nextStartTime = 0;
+            isStreaming = true;
+
+            // Clear UI messages
+            progressDiv.classList.remove('visible');
+            errorDiv.classList.remove('visible');
+            generateBtn.disabled = true;
+
+            // Start generation
+            try {
+                const url = `/generate?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}`;
+                currentEventSource = new EventSource(url);
+                stopBtn.disabled = false;
+
+                currentEventSource.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+
+                    if (data.type === 'start') {
+                        // Store generation ID for stop requests
+                        currentGenerationId = data.generation_id;
+                        showProgress(`Generating ${data.chunks} chunks...`);
+                    } else if (data.type === 'progress') {
+                        showProgress(data.message);
+                    } else if (data.type === 'chunk') {
+                        handleAudioChunk(data.data);
+                    } else if (data.type === 'complete') {
+                        currentEventSource.close();
+                        currentEventSource = null;
+                        currentGenerationId = null;
+                        isStreaming = false;
+                        showProgress('Generation complete!');
+                        generateBtn.disabled = false;
+                        stopBtn.disabled = true;
+                    } else if (data.type === 'error') {
+                        currentEventSource.close();
+                        currentEventSource = null;
+                        currentGenerationId = null;
+                        isStreaming = false;
+                        showError(data.message);
+                        generateBtn.disabled = false;
+                        stopBtn.disabled = true;
+                    }
+                };
+
+                currentEventSource.onerror = (error) => {
+                    console.error('EventSource error:', error);
+                    currentEventSource.close();
+                    currentEventSource = null;
+                    isStreaming = false;
+                    showError('Connection error. Please try again.');
+                    generateBtn.disabled = false;
+                    stopBtn.disabled = true;
+                };
+            } catch (error) {
+                console.error('Generation error:', error);
+                showError('Failed to start generation');
+                generateBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        });
+
+        // Stop generation
+        function stopGeneration() {
+            if (currentEventSource) {
+                // Request backend to stop this specific generation with timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                const stopUrl = currentGenerationId !== null
+                    ? `/stop?generation_id=${currentGenerationId}`
+                    : '/stop';
+                fetch(stopUrl, { method: 'POST', signal: controller.signal })
+                    .catch(e => console.error('Failed to send stop request:', e))
+                    .finally(() => clearTimeout(timeoutId));
+                currentEventSource.close();
+                currentEventSource = null;
+                currentGenerationId = null;
+                isStreaming = false;
+                showProgress('Generation stopped');
+                generateBtn.disabled = false;
+                stopBtn.disabled = true;
+
+                // Stop audio playback but keep buffers for replay
+                if (isPlaying) {
+                    stopPlayback();
+                }
+
+                // Reset playback position to beginning for replay
+                playbackOffset = 0;
+                updateTimeDisplay();
+
+                // Note: We don't clear audioBuffers or hide the player,
+                // so the user can still replay what was generated
+            }
+        }
+
+        // Stop button click handler
+        stopBtn.addEventListener('click', stopGeneration);
+
+        function showProgress(message) {
+            progressDiv.textContent = message;
+            progressDiv.classList.add('visible');
+        }
+
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.classList.add('visible');
+        }
+
+        async function handleAudioChunk(base64Data) {
+            // Add to queue
+            chunkQueue.push(base64Data);
+
+            // Process queue if not already processing
+            if (!processingChunk) {
+                await processChunkQueue();
+            }
+        }
+
+        async function processChunkQueue() {
+            if (chunkQueue.length === 0) {
+                processingChunk = false;
+                return;
+            }
+
+            processingChunk = true;
+            const base64Data = chunkQueue.shift();
+
+            console.log(`Processing chunk ${audioBuffers.length + 1}, ${chunkQueue.length} remaining in queue`);
+
+            // Decode base64 to array buffer
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+
+            // Decode audio data using Web Audio API
+            let audioBuffer;
+            try {
+                audioBuffer = await audioContext.decodeAudioData(bytes.buffer);
+            } catch (error) {
+                console.error('Failed to decode audio chunk:', error);
+                showError('Failed to decode audio chunk. The stream may be corrupted.');
+                processingChunk = false;
+                return;
+            }
+            audioBuffers.push(audioBuffer);
+
+            // Update total duration
+            totalDuration += audioBuffer.duration;
+
+            console.log(`Decoded chunk ${audioBuffers.length}: ${audioBuffer.duration.toFixed(2)}s, total duration: ${totalDuration.toFixed(2)}s`);
+
+            // Show audio player and update time display
+            audioPlayerDiv.classList.add('visible');
+            updateTimeDisplay();
+
+            // Auto-start playback on first chunk
+            if (audioBuffers.length === 1 && !isPlaying) {
+                startPlayback(0);
+            }
+
+            // Process next chunk in queue
+            await processChunkQueue();
+        }
+
+        function concatenateAudioBuffers(buffers) {
+            if (buffers.length === 0) return null;
+            if (buffers.length === 1) return buffers[0];
+
+            const sampleRate = buffers[0].sampleRate;
+            const numberOfChannels = buffers[0].numberOfChannels;
+
+            // Calculate total length
+            const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0);
+
+            // Create new buffer
+            const result = audioContext.createBuffer(numberOfChannels, totalLength, sampleRate);
+
+            // Copy data from each buffer
+            let offset = 0;
+            for (const buffer of buffers) {
+                for (let channel = 0; channel < numberOfChannels; channel++) {
+                    result.getChannelData(channel).set(buffer.getChannelData(channel), offset);
+                }
+                offset += buffer.length;
+            }
+
+            return result;
+        }
+
+        // Load voices on page load
+        loadVoices();
+        subscribeToVoiceEvents();
+    </script>
+</body>
+</html>
