@@ -13,3 +13,6 @@ voice_library/*.wav
 
 # Internal plans and notes
 docs/
+
+# Dogfood test output
+dogfood-output/
