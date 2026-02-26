@@ -58,14 +58,18 @@ class AudioGenerator:
         self.device = model.device
         self._generation_id = 0  # Unique ID for each generation
         self._stop_generation_id = -1  # Which generation ID to stop (-1 = none)
-        self._is_generating = False
+        self._active_generations = 0  # Count of active generators (thread-safe via _id_lock)
         self._generation_lock = threading.Lock()  # Prevent concurrent generations
-        self._id_lock = threading.Lock()  # Protect generation_id and stop_generation_id
+        self._id_lock = threading.Lock()  # Protect generation_id, stop_generation_id, active count
 
     @property
     def is_generating(self) -> bool:
-        """Check if generation is currently in progress."""
-        return self._is_generating
+        """Check if any generation is active (including between chunks).
+
+        Uses a counter rather than a boolean so that overlapping generator
+        lifecycles (one orphaned at yield, one active) don't race on the flag.
+        """
+        return self._active_generations > 0
 
     def request_stop(self, generation_id: int | None = None) -> None:
         """Request a specific generation to stop after the current chunk.
@@ -136,69 +140,74 @@ class AudioGenerator:
         rng_seed: int,
         my_generation_id: int,
     ) -> Generator[torch.Tensor, None, None]:
-        """Internal generator that yields audio chunks."""
+        """Internal generator that yields audio chunks.
 
-        # Acquire lock to prevent concurrent generations
-        # This blocks until any previous generation finishes its current chunk
-        self._generation_lock.acquire()
+        The lock is acquired per-chunk (not for the entire generation) so that
+        if the SSE consumer disconnects and this generator is orphaned at a
+        yield point, the lock is already released and new generations can proceed.
+        """
+
         try:
-            logger.info(f"Generation {my_generation_id} acquired lock, starting")
-            self._is_generating = True
-
-            # Check if we were stopped while waiting for the lock
-            if self._stop_generation_id >= my_generation_id:
-                logger.info(f"Generation {my_generation_id} was stopped while waiting for lock")
-                return
-
+            with self._id_lock:
+                self._active_generations += 1
             continuation_latent = None
             previous_chunk_text = ""  # Continuation text from previous chunk
 
             for i, chunk_text in enumerate(text_chunks):
-                # Check for stop request targeting THIS generation
-                if self._stop_generation_id >= my_generation_id:
-                    logger.info(f"Generation {my_generation_id} stopped by user")
-                    return
+                # Acquire lock per-chunk to protect the GPU
+                # If generator is orphaned at yield, lock is already released
+                self._generation_lock.acquire()
+                try:
+                    logger.info(f"Generation {my_generation_id} acquired lock for chunk {i+1}/{len(text_chunks)}")
 
-                # Log chunk number and full text (encode to ASCII to avoid unicode errors in Windows console)
-                chunk_text_safe = chunk_text.encode('ascii', 'replace').decode('ascii')
-                logger.info(f"Generating chunk {i+1}/{len(text_chunks)}: {chunk_text_safe}")
+                    # Check if we were stopped while waiting for the lock
+                    if self._stop_generation_id >= my_generation_id:
+                        logger.info(f"Generation {my_generation_id} stopped by user")
+                        return
 
-                # When using continuation, include portion of previous chunk's text
-                # (~last 60% of previous chunk, aligned to sentence boundary)
-                if previous_chunk_text:
-                    # Encode to ASCII to avoid unicode errors
-                    prev_preview = previous_chunk_text[:80].encode('ascii', 'replace').decode('ascii')
-                    logger.debug(f"  Previous chunk text ({len(previous_chunk_text)} chars): {prev_preview}..." if len(previous_chunk_text) > 80 else f"  Previous chunk text: {prev_preview}")
-                    full_text = previous_chunk_text + " " + chunk_text
-                    full_preview = full_text[:150].encode('ascii', 'replace').decode('ascii')
-                    logger.debug(f"  Full text for generation ({len(full_text)} chars): {full_preview}..." if len(full_text) > 150 else f"  Full text: {full_preview}")
-                else:
-                    full_text = chunk_text
+                    # Log chunk number and full text (encode to ASCII to avoid unicode errors in Windows console)
+                    chunk_text_safe = chunk_text.encode('ascii', 'replace').decode('ascii')
+                    logger.info(f"Generating chunk {i+1}/{len(text_chunks)}: {chunk_text_safe}")
 
-                audio_chunk, latent_out, audio_full = self._generate_chunk(
-                    full_text,
-                    speaker_latent,
-                    speaker_mask,
-                    continuation_latent,
-                    rng_seed + i,  # Different seed per chunk
-                )
+                    # When using continuation, include portion of previous chunk's text
+                    # (~last 60% of previous chunk, aligned to sentence boundary)
+                    if previous_chunk_text:
+                        # Encode to ASCII to avoid unicode errors
+                        prev_preview = previous_chunk_text[:80].encode('ascii', 'replace').decode('ascii')
+                        logger.debug(f"  Previous chunk text ({len(previous_chunk_text)} chars): {prev_preview}..." if len(previous_chunk_text) > 80 else f"  Previous chunk text: {prev_preview}")
+                        full_text = previous_chunk_text + " " + chunk_text
+                        full_preview = full_text[:150].encode('ascii', 'replace').decode('ascii')
+                        logger.debug(f"  Full text for generation ({len(full_text)} chars): {full_preview}..." if len(full_text) > 150 else f"  Full text: {full_preview}")
+                    else:
+                        full_text = chunk_text
 
-                # audio_chunk = NEW audio only (continuation removed, for yielding)
-                # audio_full = FULL cropped audio (includes continuation)
+                    audio_chunk, latent_out, audio_full = self._generate_chunk(
+                        full_text,
+                        speaker_latent,
+                        speaker_mask,
+                        continuation_latent,
+                        rng_seed + i,  # Different seed per chunk
+                    )
 
-                # Extract continuation from NEW audio only (not including previous continuation)
-                # This prevents continuation from growing each iteration
-                if i < len(text_chunks) - 1:  # Not the last chunk
-                    continuation_latent = self._extract_continuation(latent_out, audio_chunk)
+                    # audio_chunk = NEW audio only (continuation removed, for yielding)
+                    # audio_full = FULL cropped audio (includes continuation)
 
-                    # Use full previous chunk text - continuation latents now cover most of the chunk
-                    previous_chunk_text = chunk_text
+                    # Extract continuation from NEW audio only (not including previous continuation)
+                    # This prevents continuation from growing each iteration
+                    if i < len(text_chunks) - 1:  # Not the last chunk
+                        continuation_latent = self._extract_continuation(latent_out, audio_chunk)
 
+                        # Use full previous chunk text - continuation latents now cover most of the chunk
+                        previous_chunk_text = chunk_text
+                finally:
+                    self._generation_lock.release()
+                    logger.info(f"Generation {my_generation_id} released lock for chunk {i+1}/{len(text_chunks)}")
+
+                # Yield OUTSIDE the lock - orphaned generators can't hold it
                 yield audio_chunk
         finally:
-            self._is_generating = False
-            self._generation_lock.release()
-            logger.info(f"Generation {my_generation_id} released lock")
+            with self._id_lock:
+                self._active_generations -= 1
 
     def _generate_chunk(
         self,

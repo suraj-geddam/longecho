@@ -753,7 +753,7 @@
         let audioContext = null;
         let processingChunk = false;
         let chunkQueue = [];
-        let currentEventSource = null;
+        let currentAbortController = null;
         let currentGenerationId = null;  // Track generation ID for stop requests
 
         // AudioBufferSourceNode scheduling state
@@ -1214,52 +1214,65 @@
 
             // Start generation
             try {
-                const url = `/generate?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}`;
-                currentEventSource = new EventSource(url);
+                currentAbortController = new AbortController();
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, voice }),
+                    signal: currentAbortController.signal,
+                });
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `Server error: ${response.status}`);
+                }
                 stopBtn.disabled = false;
 
-                currentEventSource.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
 
-                    if (data.type === 'start') {
-                        // Store generation ID for stop requests
-                        currentGenerationId = data.generation_id;
-                        showProgress(`Generating ${data.chunks} chunks...`);
-                    } else if (data.type === 'progress') {
-                        showProgress(data.message);
-                    } else if (data.type === 'chunk') {
-                        handleAudioChunk(data.data);
-                    } else if (data.type === 'complete') {
-                        currentEventSource.close();
-                        currentEventSource = null;
-                        currentGenerationId = null;
-                        isStreaming = false;
-                        showProgress('Generation complete!');
-                        generateBtn.disabled = false;
-                        stopBtn.disabled = true;
-                    } else if (data.type === 'error') {
-                        currentEventSource.close();
-                        currentEventSource = null;
-                        currentGenerationId = null;
-                        isStreaming = false;
-                        showError(data.message);
-                        generateBtn.disabled = false;
-                        stopBtn.disabled = true;
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        const data = JSON.parse(line.slice(6));
+
+                        if (data.type === 'start') {
+                            currentGenerationId = data.generation_id;
+                            showProgress(`Generating ${data.chunks} chunks...`);
+                        } else if (data.type === 'progress') {
+                            showProgress(data.message);
+                        } else if (data.type === 'chunk') {
+                            handleAudioChunk(data.data);
+                        } else if (data.type === 'complete') {
+                            currentGenerationId = null;
+                            isStreaming = false;
+                            showProgress('Generation complete!');
+                            generateBtn.disabled = false;
+                            stopBtn.disabled = true;
+                        } else if (data.type === 'error') {
+                            currentGenerationId = null;
+                            isStreaming = false;
+                            showError(data.message);
+                            generateBtn.disabled = false;
+                            stopBtn.disabled = true;
+                        }
                     }
-                };
-
-                currentEventSource.onerror = (error) => {
-                    console.error('EventSource error:', error);
-                    currentEventSource.close();
-                    currentEventSource = null;
-                    isStreaming = false;
-                    showError('Connection error. Please try again.');
-                    generateBtn.disabled = false;
-                    stopBtn.disabled = true;
-                };
+                }
             } catch (error) {
-                console.error('Generation error:', error);
-                showError('Failed to start generation');
+                if (error.name !== 'AbortError') {
+                    console.error('Generation error:', error);
+                    showError(error.message || 'Failed to start generation');
+                }
+                currentAbortController = null;
+                currentGenerationId = null;
+                isStreaming = false;
                 generateBtn.disabled = false;
                 stopBtn.disabled = true;
             }
@@ -1267,7 +1280,7 @@
 
         // Stop generation
         function stopGeneration() {
-            if (currentEventSource) {
+            if (currentAbortController) {
                 // Request backend to stop this specific generation with timeout
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -1277,8 +1290,8 @@
                 fetch(stopUrl, { method: 'POST', signal: controller.signal })
                     .catch(e => console.error('Failed to send stop request:', e))
                     .finally(() => clearTimeout(timeoutId));
-                currentEventSource.close();
-                currentEventSource = null;
+                currentAbortController.abort();
+                currentAbortController = null;
                 currentGenerationId = null;
                 isStreaming = false;
                 showProgress('Generation stopped');

@@ -677,3 +677,56 @@ class TestGenerationLock:
         # At most 1 generation should be doing GPU work at any time
         assert max_concurrent[0] == 1, \
             f"Expected max 1 concurrent GPU operation, but saw {max_concurrent[0]}"
+
+    def test_orphaned_generator_at_yield_does_not_hold_lock(self, generator, mock_inference):
+        """
+        Bug reproduction: When a generator is abandoned at a yield point
+        (e.g., SSE consumer disconnects), the lock must NOT be held forever.
+
+        A new generation must be able to acquire the lock and proceed.
+
+        Scenario:
+        1. Start generation A, get first chunk (generator now suspended at yield)
+        2. Abandon generator A (don't exhaust it, simulating SSE disconnect)
+        3. Start generation B - should acquire lock and complete, NOT deadlock
+        """
+        import threading
+
+        speaker_latent = torch.randn(1, 100, 80)
+        speaker_mask = torch.ones(1, 100, dtype=torch.bool)
+        text_chunks_a = ["A1.", "A2.", "A3."]
+        text_chunks_b = ["B1.", "B2."]
+
+        # Start generation A and get one chunk
+        gen_id_a, gen_a = generator.generate_long_audio(text_chunks_a, speaker_latent, speaker_mask)
+        chunk = next(gen_a)
+        assert chunk is not None
+
+        # Abandon gen_a here - simulates SSE consumer disconnect.
+        # The generator is suspended at yield, holding whatever resources it holds.
+        # We intentionally do NOT call gen_a.close() or exhaust it.
+        # (In the real bug, generator.close() fails because thread is still running)
+
+        # Now try to start generation B - this should NOT deadlock
+        gen_b_result = []
+        gen_b_error = [None]
+
+        def run_gen_b():
+            try:
+                gen_id_b, gen_b = generator.generate_long_audio(text_chunks_b, speaker_latent, speaker_mask)
+                for c in gen_b:
+                    gen_b_result.append(c)
+            except Exception as e:
+                gen_b_error[0] = e
+
+        thread_b = threading.Thread(target=run_gen_b)
+        thread_b.start()
+        thread_b.join(timeout=5)  # 5 second timeout - should be plenty
+
+        # If thread_b is still alive, we deadlocked
+        assert not thread_b.is_alive(), \
+            "Generation B deadlocked waiting for lock held by orphaned generator A"
+
+        assert gen_b_error[0] is None, f"Generation B errored: {gen_b_error[0]}"
+        assert len(gen_b_result) == 2, \
+            f"Generation B should have completed with 2 chunks but got {len(gen_b_result)}"

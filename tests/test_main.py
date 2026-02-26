@@ -105,7 +105,7 @@ def test_generate_validation_empty_text(mock_dependencies):
     from longecho.main import app
 
     with TestClient(app) as client:
-        response = client.get("/generate", params={"text": "", "voice": "voice1"})
+        response = client.post("/generate", json={"text": "", "voice": "voice1"})
         assert response.status_code == 422  # Unprocessable Entity
 
         # Check that the error message mentions text validation
@@ -118,24 +118,11 @@ def test_generate_validation_text_too_long(mock_dependencies):
     from longecho.main import app
 
     with TestClient(app) as client:
-        # Create text with 100,001 characters (max is 100,000)
-        # Note: We can't actually test with 100k+ chars in URL due to HTTP URL length limits,
-        # but FastAPI validation will catch this before the request is processed.
-        # Testing with a smaller but still excessive length to verify validation works.
         long_text = "a" * 100001
-
-        # This will fail with 422 due to validation if it reaches FastAPI,
-        # or with URL error if the HTTP client rejects it first.
-        # Both outcomes indicate the request would be rejected.
-        try:
-            response = client.get("/generate", params={"text": long_text, "voice": "voice1"})
-            # If we get here, check it was rejected
-            assert response.status_code == 422
-            data = response.json()
-            assert "detail" in data
-        except Exception as e:
-            # URL too long error from HTTP client also means validation would work
-            assert "too long" in str(e).lower()
+        response = client.post("/generate", json={"text": long_text, "voice": "voice1"})
+        assert response.status_code == 422
+        data = response.json()
+        assert "detail" in data
 
 
 def test_generate_validation_empty_voice(mock_dependencies):
@@ -143,7 +130,7 @@ def test_generate_validation_empty_voice(mock_dependencies):
     from longecho.main import app
 
     with TestClient(app) as client:
-        response = client.get("/generate", params={"text": "Hello world", "voice": ""})
+        response = client.post("/generate", json={"text": "Hello world", "voice": ""})
         assert response.status_code == 422  # Unprocessable Entity
 
         # Check that the error message mentions voice validation
@@ -172,7 +159,7 @@ def test_generate_validation_valid_inputs(mock_dependencies):
     # Mock segment_text to return a single chunk
     with patch('longecho.main.segment_text', return_value=["Hello world"]):
         with TestClient(app) as client:
-            response = client.get("/generate", params={"text": "Hello world", "voice": "voice1"})
+            response = client.post("/generate", json={"text": "Hello world", "voice": "voice1"})
             # SSE endpoint should return 200 for successful stream initiation
             assert response.status_code == 200
             assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
@@ -196,14 +183,12 @@ def test_generate_validation_max_length_boundary(mock_dependencies):
     mock_audio_tensor = torch.randn(1, 1, 44100)
     mock_audio_generator.generate_long_audio.return_value = iter([mock_audio_tensor])
 
-    # Create text with a reasonable length that tests validation works
-    # but doesn't exceed HTTP URL limits (testing with 5000 chars)
     test_text = "This is a test sentence. " * 200  # ~5000 characters
 
     # Mock segment_text to return a single chunk
     with patch('longecho.main.segment_text', return_value=[test_text[:100]]):
         with TestClient(app) as client:
-            response = client.get("/generate", params={"text": test_text, "voice": "voice1"})
+            response = client.post("/generate", json={"text": test_text, "voice": "voice1"})
             # Should accept text below max length
             assert response.status_code == 200
 
@@ -243,7 +228,7 @@ def test_generate_with_normalization_level_moderate(mock_dependencies):
 
     with patch('longecho.main.segment_text', return_value=["Hello world"]):
         with TestClient(app) as client:
-            response = client.get("/generate", params={
+            response = client.post("/generate", json={
                 "text": "Hello world",
                 "voice": "voice1",
                 "normalization_level": "moderate"
@@ -269,7 +254,7 @@ def test_generate_with_normalization_level_full(mock_dependencies):
 
     with patch('longecho.main.segment_text', return_value=["Hello world"]):
         with TestClient(app) as client:
-            response = client.get("/generate", params={
+            response = client.post("/generate", json={
                 "text": "Hello world",
                 "voice": "voice1",
                 "normalization_level": "full"
@@ -282,7 +267,7 @@ def test_generate_with_invalid_normalization_level(mock_dependencies):
     from longecho.main import app
 
     with TestClient(app) as client:
-        response = client.get("/generate", params={
+        response = client.post("/generate", json={
             "text": "Hello world",
             "voice": "voice1",
             "normalization_level": "invalid"
@@ -317,7 +302,7 @@ def test_generate_normalizes_text_before_segmentation(mock_dependencies):
     with patch('longecho.main.segment_text', side_effect=capture_segment_text):
         with TestClient(app) as client:
             # Input with currency that should be normalized
-            response = client.get("/generate", params={
+            response = client.post("/generate", json={
                 "text": "The cost is $5M.",
                 "voice": "voice1",
             })

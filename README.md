@@ -112,7 +112,7 @@ Text is split into ~160-220 character chunks at natural boundaries:
 
 - `GET /` - Web UI
 - `GET /voices` - List available voices
-- `GET /generate?text=...&voice=...&normalization_level=moderate` - Generate audio (SSE stream)
+- `POST /generate` - Generate audio (SSE stream). JSON body: `{"text": "...", "voice": "...", "normalization_level": "moderate"}`
 - `GET /health` - Health check
 
 ## Development

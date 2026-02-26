@@ -8,9 +8,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import Depends, FastAPI, Query, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 import torch
 import torchaudio
 
@@ -250,11 +251,15 @@ async def stop_generation(
     return {"status": "stop requested", "generation_id": generation_id}
 
 
-@app.get("/generate")
+class GenerateRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=100000)
+    voice: str = Field(..., min_length=1)
+    normalization_level: NormalizationLevel = Field("moderate")
+
+
+@app.post("/generate")
 async def generate(
-    text: str = Query(..., min_length=1, max_length=100000, description="Text to generate audio for"),
-    voice: str = Query(..., min_length=1, description="Voice name to use"),
-    normalization_level: NormalizationLevel = Query("moderate", description="Text normalization level: 'moderate' (preserve plain numbers) or 'full' (convert all numbers to words)"),
+    body: GenerateRequest,
     voice_manager: VoiceManager = Depends(get_voice_manager),
     audio_generator: AudioGenerator = Depends(get_audio_generator),
 ):
@@ -270,17 +275,17 @@ async def generate(
     async def event_generator() -> AsyncGenerator[str, None]:
         try:
             # Validate voice exists
-            if voice not in voice_manager.get_voice_names():
-                yield f"data: {json.dumps({'type': 'error', 'message': f'Voice {voice} not found'})}\n\n"
+            if body.voice not in voice_manager.get_voice_names():
+                yield f"data: {json.dumps({'type': 'error', 'message': f'Voice {body.voice} not found'})}\n\n"
                 return
 
             # Get voice data
-            speaker_latent, speaker_mask = voice_manager.get_voice(voice)
+            speaker_latent, speaker_mask = voice_manager.get_voice(body.voice)
 
             # Normalize text for TTS (expand currencies, abbreviations, etc.)
-            normalizer = TextNormalizer(level=normalization_level)
-            normalized_text = normalizer.normalize(text)
-            logger.info(f"Normalized text ({len(text)} -> {len(normalized_text)} chars)")
+            normalizer = TextNormalizer(level=body.normalization_level)
+            normalized_text = normalizer.normalize(body.text)
+            logger.info(f"Normalized text ({len(body.text)} -> {len(normalized_text)} chars)")
 
             # Segment text
             text_chunks = segment_text(normalized_text)
@@ -317,10 +322,10 @@ async def generate(
                 # Send completion
                 yield f"data: {json.dumps({'type': 'complete'})}\n\n"
             finally:
-                # Close the generator to release the lock if it's suspended at yield.
+                # Close the generator to clean up _is_generating flag.
+                # The lock is released per-chunk (before yield), so no lock leak here.
                 # If the generator is still executing in the thread pool, close() raises
-                # ValueError - in that case the generator will finish its current iteration
-                # and release the lock when it checks the stop flag.
+                # ValueError - in that case it will stop on the next stop-flag check.
                 try:
                     generator.close()
                 except ValueError:
