@@ -135,7 +135,10 @@ longecho/
 │           └── echo_tts/        # Vendored Echo-TTS inference code
 ├── voice_library/               # Voice .wav files (user-provided)
 ├── static/
-│   └── index.html               # Web UI
+│   ├── index.html               # Web UI
+│   ├── style.css                # Styles
+│   ├── app.js                   # Client-side logic
+│   └── lamejs.min.js            # Vendored MP3 encoder
 ├── tests/                       # Test suite
 └── pyproject.toml
 ```
@@ -168,3 +171,7 @@ This project includes vendored code from Echo-TTS:
 - **Model weights** - CC-BY-NC-SA-4.0 (non-commercial use only)
 
 See `src/longecho/_vendor/echo_tts/LICENSE` for full license text.
+
+- **[lamejs](https://github.com/zhuker/lamejs)** by zhuker - LGPL-3.0 License (client-side MP3 encoding)
+
+See `static/LICENSE-lamejs` for details.
